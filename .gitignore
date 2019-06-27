@@ -1,0 +1,5 @@
+.idea
+target/
+*.iml
+scratchpad
+/.DS_Store
