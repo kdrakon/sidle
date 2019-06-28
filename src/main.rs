@@ -1,6 +1,8 @@
 use core::borrow::Borrow;
 use std::env;
+use std::fs::{DirEntry, read};
 use std::io::{Error, stdin, Write};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use clap::App;
@@ -22,11 +24,11 @@ pub enum Either<A, B> {
     Right(B),
 }
 
-#[derive(Copy, Clone)]
-pub enum DirObject<'a> {
-    Dir(&'a str),
-    File(&'a str),
-    HiddenFile(&'a str),
+#[derive(Clone)]
+pub enum DirObject {
+    Dir(String),
+    File(String),
+    HiddenFile(String),
 }
 
 fn main() -> Result<(), u8> {
@@ -37,8 +39,11 @@ fn main() -> Result<(), u8> {
         .get_matches();
 
     let (ui_thread_handle, ui_sender) = ui::start();
+    let current_dir = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
+    let dir_contents = read_dir_into_vec(current_dir)?;
+
     let mut ui_state = UIState {
-        dir_contents: vec![]
+        dir_contents
     };
 
     for key_event in std::io::stdin().keys() {
@@ -54,7 +59,17 @@ fn main() -> Result<(), u8> {
         }
     }
 
-    ui_thread_handle.join().map_err(|_|error_code::FAILED_TO_TERMINATE_UI_THREAD)?
+    ui_thread_handle.join().map_err(|_| error_code::FAILED_TO_TERMINATE_UI_THREAD)?
+}
+
+fn read_dir_into_vec(path: PathBuf) -> Result<Vec<DirObject>, u8> {
+    let mut vec: Vec<DirObject> = vec![];
+    for dir_result in std::fs::read_dir(path).map_err(|_| error_code::COULD_NOT_LIST_DIR)? {
+        let dir_entry = dir_result.map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
+        let name = dir_entry.file_name().to_str().ok_or(error_code::COULD_NOT_READ_METADATA)?.to_string();
+        vec.push(DirObject::Dir(name));
+    }
+    Ok(vec)
 }
 
 fn new_ui_state(current_ui_state: &mut UIState, key: Key) {
