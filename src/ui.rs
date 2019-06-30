@@ -5,34 +5,49 @@ use std::thread::JoinHandle;
 
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
+use termion::terminal_size;
 
 use crate::{DirObject, Either};
 use crate::DirObject::*;
 use crate::error_code;
+use crate::error_code::ErrorCode;
 
 #[derive(Clone)]
 pub struct UIState {
-    pub dir_contents: Vec<DirObject>
+    pub dir_contents: Vec<DirObject>,
 }
 
-pub fn start() -> (JoinHandle<Result<(), u8>>, Sender<Either<(), UIState>>) {
+pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), UIState>>) {
     let (sender, receiver): (Sender<Either<(), UIState>>, Receiver<Either<(), UIState>>) = mpsc::channel();
 
     let ui_thread_handle: JoinHandle<Result<(), u8>> = std::thread::spawn(|| {
-        let screen = &mut AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
+        let screen = &mut AlternateScreen::from(
+            std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?,
+        );
+
+        let buffer_init = format!("{}", termion::clear::UntilNewline);
+        let mut terminal_line_buffers: Vec<String> = Vec::new();
 
         // screen draw loop
         for message in receiver {
-            write!(screen, "{}{}", termion::clear::All, termion::cursor::Goto(1, 1)).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+            let (width, height) = terminal_size().map_err(|_| error_code::COULD_NOT_DETERMINE_TERMINAL_SIZE)?;
+            terminal_line_buffers.resize(height as usize, buffer_init.clone());
+
             match message {
                 Either::Left(_) => break,
                 Either::Right(state) => {
-                    for content in state.dir_contents {
-                        match content {
-                            Dir(name) => write!(screen, "{}{}", termion::cursor::Down(1), name),
-                            File(name) => write!(screen, "{}{}", termion::cursor::Down(1), name),
-                            HiddenFile(name) => write!(screen, "{}{}", termion::cursor::Down(1), name),
+                    for (index, content) in state.dir_contents.iter().enumerate() {
+                        let line = match content {
+                            Dir { name, .. } => format!("{}", name),
+                            File { name, .. } => format!("{}", name),
                         };
+                        terminal_line_buffers[index] = line;
+                    }
+                    write!(screen, "{}", termion::cursor::Goto(1, 1)).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+                    for line in terminal_line_buffers.as_slice() {
+                        write!(screen, "{}", line).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+                        write!(screen, "{}{}", termion::cursor::Down(1), termion::cursor::Left(line.len() as u16))
+                            .map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
                     }
                     screen.flush().map_err(|_| error_code::FAILED_TO_FLUSH_UI_SCREEN)?;
                 }
@@ -44,3 +59,5 @@ pub fn start() -> (JoinHandle<Result<(), u8>>, Sender<Either<(), UIState>>) {
 
     (ui_thread_handle, sender.clone())
 }
+
+
