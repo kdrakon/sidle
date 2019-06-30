@@ -12,6 +12,7 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
+use std::sync::Arc;
 
 mod error_code;
 mod dir_object;
@@ -24,10 +25,15 @@ pub enum Either<A, B> {
     Right(B),
 }
 
-#[derive(Clone)]
 pub struct State {
-    pub current_dir_path: PathBuf,
-    pub dir_contents: Vec<DirObject>,
+    pub dir: Dir
+}
+
+pub struct Dir {
+    pub path: PathBuf,
+    pub contents: Vec<DirObject>,
+    pub content_selection: usize,
+    pub parent: Option<Box<Dir>>
 }
 
 fn main() -> Result<(), ErrorCode> {
@@ -39,7 +45,7 @@ fn main() -> Result<(), ErrorCode> {
     let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state = State { current_dir_path, dir_contents };
+    let mut state = Arc::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }});
     ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
 
     for key_event in std::io::stdin().keys() {
@@ -50,7 +56,7 @@ fn main() -> Result<(), ErrorCode> {
                 Err(_) => Result::Err(error_code::FAILED_TO_TERMINATE_UI_THREAD)?,
             }
         } else {
-            new_state(&mut state, key);
+//            new_state(&mut state, key);
             ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
         }
     }

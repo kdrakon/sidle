@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::JoinHandle;
 
@@ -13,8 +13,8 @@ use crate::DirObject::*;
 use crate::error_code;
 use crate::error_code::ErrorCode;
 
-pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), State>>) {
-    let (sender, receiver): (Sender<Either<(), State>>, Receiver<Either<(), State>>) = mpsc::channel();
+pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<State>>>) {
+    let (sender, receiver): (Sender<Either<(), Arc<State>>>, Receiver<Either<(), Arc<State>>>) = mpsc::channel();
 
     let ui_thread_handle: JoinHandle<Result<(), u8>> = std::thread::spawn(|| {
         let screen = &mut AlternateScreen::from(
@@ -32,7 +32,7 @@ pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), State>>)
             match message {
                 Either::Left(_) => break,
                 Either::Right(state) => {
-                    for (index, content) in state.dir_contents.iter().enumerate() {
+                    for (index, content) in state.dir.contents.iter().enumerate() {
                         let line = match content {
                             Dir { name, .. } => format!("{}", name),
                             File { name, .. } => format!("{}", name),
