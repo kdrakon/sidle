@@ -8,18 +8,13 @@ use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use termion::terminal_size;
 
-use crate::{DirObject, Either};
+use crate::{DirObject, Either, State};
 use crate::DirObject::*;
 use crate::error_code;
 use crate::error_code::ErrorCode;
 
-#[derive(Clone)]
-pub struct UIState {
-    pub dir_contents: Vec<DirObject>,
-}
-
-pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), UIState>>) {
-    let (sender, receiver): (Sender<Either<(), UIState>>, Receiver<Either<(), UIState>>) = mpsc::channel();
+pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), State>>) {
+    let (sender, receiver): (Sender<Either<(), State>>, Receiver<Either<(), State>>) = mpsc::channel();
 
     let ui_thread_handle: JoinHandle<Result<(), u8>> = std::thread::spawn(|| {
         let screen = &mut AlternateScreen::from(
