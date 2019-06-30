@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -59,11 +60,21 @@ fn read_dir_into_vec(path: PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
         let dir_object = dir_entry.new_dir_object()?;
         vec.push(dir_object);
     }
+    vec.sort_by(dir_ordering);
     Ok(vec)
 }
 
 fn new_ui_state(current_ui_state: &mut UIState, key: Key) {
     match key {
         _ => {}
+    }
+}
+
+fn dir_ordering(a: &DirObject, b: &DirObject) -> Ordering {
+    match (a, b) {
+        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Less,
+        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Greater,
+        (DirObject::Dir { name: a_name, .. }, DirObject::Dir { name: b_name, .. }) => a_name.cmp(b_name),
+        (DirObject::File { name: a_name, .. }, DirObject::File { name: b_name, .. }) => a_name.cmp(b_name),
     }
 }
