@@ -57,7 +57,7 @@ fn main() -> Result<(), ErrorCode> {
                 Err(_) => Result::Err(error_code::FAILED_TO_TERMINATE_UI_THREAD)?,
             }
         } else {
-//            new_state(&mut state, key);
+            new_state(&state, key)?;
             ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
         }
     }
@@ -76,10 +76,13 @@ fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
     Ok(vec)
 }
 
-fn new_state(current_state: &mut State, key: Key) {
+fn new_state(current_state: &Arc<RwLock<State>>, key: Key) -> Result<(), ErrorCode> {
+    let mut write_state = current_state.write().map_err(|_|error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
+    write_state.dir.content_selection += 1;
     match key {
         _ => {}
     }
+    Ok(())
 }
 
 fn dir_ordering(a: &DirObject, b: &DirObject) -> Ordering {

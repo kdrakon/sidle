@@ -4,6 +4,7 @@ pub const KEY_INPUT_ERROR: u8 = 100;
 pub const COULD_NOT_LIST_DIR: u8 = 101;
 pub const COULD_NOT_READ_METADATA: u8 = 102;
 pub const UNKNOWN_DIR_OBJECT_FOUND: u8 = 103;
+pub const COULD_NOT_OBTAIN_LOCK_ON_STATE: u8 = 104;
 
 // UI-related
 pub const FAILED_TO_TERMINATE_UI_THREAD: u8 = 200;
