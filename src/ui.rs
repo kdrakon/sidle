@@ -35,7 +35,7 @@ pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<RwLo
                 Either::Left(_) => break,
                 Either::Right(state) => {
                     let read_state = state.read().map_err(|_| error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
-                    print_dir_contents(screen, terminal_line_buffers.as_mut_slice(), &read_state.dir)?;
+                    print_dir_contents(screen, height, terminal_line_buffers.as_mut_slice(), &read_state.dir)?;
                     screen.flush().map_err(|_| error_code::FAILED_TO_FLUSH_UI_SCREEN)?;
                 }
             }
@@ -47,34 +47,41 @@ pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<RwLo
     (ui_thread_handle, sender.clone())
 }
 
-fn print_dir_contents(screen: &mut impl Write, terminal_line_buffers: &mut [String], dir: &Dir) -> Result<(), ErrorCode> {
+fn print_dir_contents(screen: &mut impl Write, terminal_height: u16, terminal_line_buffers: &mut [String], dir: &Dir) -> Result<(), ErrorCode> {
     for (index, content) in dir.contents.iter().enumerate() {
         let line = match content {
             DirObject::Dir { name, .. } => {
+                let line = format!("{}{}{}", termion::style::Bold, name, termion::style::Reset);
                 if index == dir.content_selection {
-                    format!("{}{}{}{}", termion::color::Bg(termion::color::LightWhite), termion::color::Fg(termion::color::Black), name, termion::style::Reset)
+                    highlight_line(&line)
                 } else {
-                    format!("{}", name)
+                    line
                 }
-            },
+            }
             DirObject::File { name, .. } => {
+                let line = format!("{}{}", name, termion::style::Reset);
                 if index == dir.content_selection {
-                    format!("{}{}{}{}", termion::color::Bg(termion::color::LightWhite), termion::color::Fg(termion::color::Black), name, termion::style::Reset)
+                    highlight_line(&line)
                 } else {
-                    format!("{}", name)
+                    line
                 }
             }
         };
         terminal_line_buffers[index] = line;
     }
-    write!(screen, "{}", termion::cursor::Goto(1, 1)).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+
+    write!(screen, "{}", termion::cursor::Goto(1, terminal_height)).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
     for line in terminal_line_buffers {
         write!(screen, "{}", line).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
-        write!(screen, "{}{}", termion::cursor::Down(1), termion::cursor::Left(line.len() as u16))
+        write!(screen, "{}{}", termion::cursor::Up(1), termion::cursor::Left(line.len() as u16))
             .map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
     }
 
     Ok(())
+}
+
+fn highlight_line(line: &str) -> String {
+    format!("{}{}{}", termion::color::Bg(termion::color::LightWhite), termion::color::Fg(termion::color::Black), line)
 }
 
 

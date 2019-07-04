@@ -1,6 +1,8 @@
+use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::env;
 use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use clap::App;
@@ -12,8 +14,6 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
-use std::sync::{Arc, RwLock};
-use std::cell::{RefCell, Ref};
 
 mod error_code;
 mod dir_object;
@@ -34,7 +34,7 @@ pub struct Dir {
     pub path: PathBuf,
     pub contents: Vec<DirObject>,
     pub content_selection: usize,
-    pub parent: Option<Box<Dir>>
+    pub parent: Option<Box<Dir>>,
 }
 
 fn main() -> Result<(), ErrorCode> {
@@ -46,7 +46,7 @@ fn main() -> Result<(), ErrorCode> {
     let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }}));
+    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None } }));
     ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
 
     for key_event in std::io::stdin().keys() {
@@ -65,6 +65,16 @@ fn main() -> Result<(), ErrorCode> {
     ui_thread_handle.join().map_err(|_| error_code::FAILED_TO_TERMINATE_UI_THREAD)?
 }
 
+fn new_state(current_state: &Arc<RwLock<State>>, key: Key) -> Result<(), ErrorCode> {
+    let mut write_state = current_state.write().map_err(|_| error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
+    match key {
+        Key::Up => write_state.dir.content_selection = std::cmp::min(write_state.dir.contents.len() - 1, write_state.dir.content_selection + 1),
+        Key::Down => if write_state.dir.content_selection >= 1 { write_state.dir.content_selection -= 1 },
+        _ => {}
+    }
+    Ok(())
+}
+
 fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
     let mut vec: Vec<DirObject> = vec![];
     for dir_result in std::fs::read_dir(path).map_err(|_| error_code::COULD_NOT_LIST_DIR)? {
@@ -76,19 +86,10 @@ fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
     Ok(vec)
 }
 
-fn new_state(current_state: &Arc<RwLock<State>>, key: Key) -> Result<(), ErrorCode> {
-    let mut write_state = current_state.write().map_err(|_|error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
-    write_state.dir.content_selection += 1;
-    match key {
-        _ => {}
-    }
-    Ok(())
-}
-
 fn dir_ordering(a: &DirObject, b: &DirObject) -> Ordering {
     match (a, b) {
-        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Greater,
-        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Less,
+        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Less,
+        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Greater,
         (DirObject::Dir { name: a_name, .. }, DirObject::Dir { name: b_name, .. }) => name_ordering(a_name, b_name),
         (DirObject::File { name: a_name, .. }, DirObject::File { name: b_name, .. }) => name_ordering(a_name, b_name),
     }
@@ -98,11 +99,11 @@ fn name_ordering(a: &str, b: &str) -> Ordering {
     match (a, b) {
         (a, b) if a.starts_with('.') ^ b.starts_with('.') => {
             if a.starts_with('.') {
-                Ordering::Less
-            } else {
                 Ordering::Greater
+            } else {
+                Ordering::Less
             }
-        },
-        (a, b) => b.cmp(a)
+        }
+        (a, b) => a.cmp(b)
     }
 }
