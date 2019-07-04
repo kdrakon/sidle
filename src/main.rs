@@ -12,7 +12,8 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
+use std::cell::{RefCell, Ref};
 
 mod error_code;
 mod dir_object;
@@ -45,7 +46,7 @@ fn main() -> Result<(), ErrorCode> {
     let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state = Arc::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }});
+    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }}));
     ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
 
     for key_event in std::io::stdin().keys() {
@@ -83,9 +84,22 @@ fn new_state(current_state: &mut State, key: Key) {
 
 fn dir_ordering(a: &DirObject, b: &DirObject) -> Ordering {
     match (a, b) {
-        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Less,
-        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Greater,
-        (DirObject::Dir { name: a_name, .. }, DirObject::Dir { name: b_name, .. }) => a_name.cmp(b_name),
-        (DirObject::File { name: a_name, .. }, DirObject::File { name: b_name, .. }) => a_name.cmp(b_name),
+        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Greater,
+        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Less,
+        (DirObject::Dir { name: a_name, .. }, DirObject::Dir { name: b_name, .. }) => name_ordering(a_name, b_name),
+        (DirObject::File { name: a_name, .. }, DirObject::File { name: b_name, .. }) => name_ordering(a_name, b_name),
+    }
+}
+
+fn name_ordering(a: &str, b: &str) -> Ordering {
+    match (a, b) {
+        (a, b) if a.starts_with('.') ^ b.starts_with('.') => {
+            if a.starts_with('.') {
+                Ordering::Less
+            } else {
+                Ordering::Greater
+            }
+        },
+        (a, b) => b.cmp(a)
     }
 }
