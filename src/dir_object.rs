@@ -6,14 +6,8 @@ use crate::error_code::ErrorCode;
 
 #[derive(Clone)]
 pub enum DirObject {
-    Dir {
-        name: String,
-        path: PathBuf,
-    },
-    File {
-        name: String,
-        path: PathBuf,
-    },
+    Dir { name: String, path: PathBuf },
+    File { name: String, path: PathBuf },
 }
 
 pub trait IntoDirObject {
@@ -26,15 +20,9 @@ impl IntoDirObject for DirEntry {
         let name = self.file_name().into_string().map_err(|_| error_code::COULD_NOT_READ_METADATA)?;
         let path = self.path();
         if metadata.is_dir() {
-            Ok(DirObject::Dir {
-                name,
-                path,
-            })
+            Ok(DirObject::Dir { name, path })
         } else if metadata.is_file() {
-            Ok(DirObject::File {
-                name,
-                path,
-            })
+            Ok(DirObject::File { name, path })
         } else {
             Err(error_code::UNKNOWN_DIR_OBJECT_FOUND)
         }

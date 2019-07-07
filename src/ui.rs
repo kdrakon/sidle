@@ -2,21 +2,22 @@ use core::borrow::Borrow;
 use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::io::Write;
-use std::sync::{Arc, mpsc, RwLock};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{mpsc, Arc, RwLock};
 use std::thread::JoinHandle;
 
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use termion::terminal_size;
 
-use crate::{DirObject, Either, State};
-use crate::Dir;
 use crate::error_code;
 use crate::error_code::ErrorCode;
+use crate::Dir;
+use crate::{DirObject, Either, State};
 
 pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<RwLock<State>>>>) {
-    let (sender, receiver): (Sender<Either<(), Arc<RwLock<State>>>>, Receiver<Either<(), Arc<RwLock<State>>>>) = mpsc::channel();
+    let (sender, receiver): (Sender<Either<(), Arc<RwLock<State>>>>, Receiver<Either<(), Arc<RwLock<State>>>>) =
+        mpsc::channel();
 
     let ui_thread_handle: JoinHandle<Result<(), u8>> = std::thread::spawn(|| {
         let screen = &mut AlternateScreen::from(
@@ -47,7 +48,12 @@ pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<RwLo
     (ui_thread_handle, sender.clone())
 }
 
-fn print_dir_contents(screen: &mut impl Write, terminal_height: u16, terminal_line_buffers: &mut [String], dir: &Dir) -> Result<(), ErrorCode> {
+fn print_dir_contents(
+    screen: &mut impl Write,
+    terminal_height: u16,
+    terminal_line_buffers: &mut [String],
+    dir: &Dir,
+) -> Result<(), ErrorCode> {
     for (index, content) in dir.contents.iter().enumerate() {
         let line = match content {
             DirObject::Dir { name, .. } => {
@@ -83,5 +89,3 @@ fn print_dir_contents(screen: &mut impl Write, terminal_height: u16, terminal_li
 fn highlight_line(line: &str) -> String {
     format!("{}{}{}", termion::color::Bg(termion::color::LightWhite), termion::color::Fg(termion::color::Black), line)
 }
-
-

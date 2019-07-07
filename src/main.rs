@@ -15,8 +15,8 @@ use termion::terminal_size;
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
 
-mod error_code;
 mod dir_object;
+mod error_code;
 mod ui;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -27,9 +27,10 @@ pub enum Either<A, B> {
 }
 
 pub struct State {
-    pub dir: Dir
+    pub dir: Box<Dir>,
 }
 
+#[derive(Clone)]
 pub struct Dir {
     pub path: PathBuf,
     pub contents: Vec<DirObject>,
@@ -46,7 +47,9 @@ fn main() -> Result<(), ErrorCode> {
     let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None } }));
+    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State {
+        dir: Box::new(Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }),
+    }));
     ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
 
     for key_event in std::io::stdin().keys() {
@@ -68,8 +71,41 @@ fn main() -> Result<(), ErrorCode> {
 fn new_state(current_state: &Arc<RwLock<State>>, key: Key) -> Result<(), ErrorCode> {
     let mut write_state = current_state.write().map_err(|_| error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
     match key {
-        Key::Up => write_state.dir.content_selection = std::cmp::min(write_state.dir.contents.len() - 1, write_state.dir.content_selection + 1),
-        Key::Down => if write_state.dir.content_selection >= 1 { write_state.dir.content_selection -= 1 },
+        Key::Up => {
+            write_state.dir.content_selection =
+                std::cmp::min(write_state.dir.contents.len() - 1, write_state.dir.content_selection + 1)
+        }
+        Key::Down => {
+            if write_state.dir.content_selection >= 1 {
+                write_state.dir.content_selection -= 1
+            }
+        }
+        Key::Right => {
+            let dir_name = write_state.dir.contents.get(write_state.dir.content_selection).and_then(|selection| {
+                match selection {
+                    DirObject::File { .. } => None,
+                    DirObject::Dir { name, .. } => Some(name.clone())
+                }
+            });
+
+            match dir_name {
+                None => (),
+                Some(dir_name) => {
+                    let parent_dir = write_state.dir.clone();
+                    write_state.dir.path.push(dir_name);
+                    write_state.dir.contents = read_dir(&write_state.dir.path)?;
+                    write_state.dir.parent = Some(parent_dir);
+                }
+            }
+        },
+        Key::Left => {
+//            match write_state.dir.parent.as_ref() {
+//                None => unimplemented!(),
+//                Some(parent) => {
+//                    write_state.dir = *parent;
+//                }
+//            }
+        }
         _ => {}
     }
     Ok(())
@@ -104,6 +140,6 @@ fn name_ordering(a: &str, b: &str) -> Ordering {
                 Ordering::Less
             }
         }
-        (a, b) => a.cmp(b)
+        (a, b) => a.cmp(b),
     }
 }
