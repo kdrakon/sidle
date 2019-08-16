@@ -84,6 +84,14 @@ fn print_dir_contents(
                     line
                 }
             }
+            DirObject::Unknown { name, .. } => {
+                let line = format!("{}{}", name, termion::style::Reset);
+                if index == dir.content_selection {
+                    highlight_line(&line)
+                } else {
+                    line
+                }
+            }
         };
         terminal_line_buffers[index] = line;
     }

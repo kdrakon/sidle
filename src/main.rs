@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use clap::App;
+use clap::{App, Arg};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
@@ -44,12 +44,15 @@ pub struct Dir {
 fn main() -> Result<(), ErrorCode> {
     let _args: Vec<String> = env::args().collect();
 
-    let matches = App::new("sidle").version(VERSION).get_matches();
+    let matches = App::new("sidle").version(VERSION).arg(Arg::with_name("path").required(false)).get_matches();
 
     let mut screen =
         AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
 
-    let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
+    let current_dir_path = match matches.value_of("path") {
+        None => std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?,
+        Some(path) => PathBuf::from(path),
+    };
     let dir_contents = read_dir(&current_dir_path)?;
 
     let mut state =
@@ -86,27 +89,31 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
         Key::Right => {
             let dir_name =
                 current_state.dir.contents.get(current_state.dir.content_selection).and_then(|selection| match selection {
-                    DirObject::File { .. } => None,
+                    DirObject::File { .. } | DirObject::Unknown { .. } => None,
                     DirObject::Dir { name, .. } => Some(name.clone()),
                 });
 
             match dir_name {
-                None => (),
+                None => Ok(current_state),
                 Some(dir_name) => {
                     let parent_dir = current_state.dir.clone();
                     current_state.dir.path.push(dir_name);
                     current_state.dir.contents = read_dir(&current_state.dir.path)?;
+                    current_state.dir.content_selection = 0;
                     current_state.parents.push(parent_dir);
+                    Ok(current_state)
                 }
             }
-
-            Ok(current_state)
         }
         Key::Left => {
             let mut parents = current_state.parents;
             let parent = match parents.pop() {
-                None => unimplemented!(),
-                Some(tail) => tail,
+                Some(parent) => parent,
+                None => {
+                    current_state.dir.path.pop();
+                    let contents = read_dir(&current_state.dir.path)?;
+                    Dir { path: current_state.dir.path, contents, content_selection: 0 }
+                }
             };
             Ok(State { dir: parent, parents })
         }
@@ -121,28 +128,6 @@ fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
         let dir_object = dir_entry.new_dir_object()?;
         vec.push(dir_object);
     }
-    vec.sort_by(dir_ordering);
+    vec.sort_by(dir_object::dir_ordering);
     Ok(vec)
-}
-
-fn dir_ordering(a: &DirObject, b: &DirObject) -> Ordering {
-    match (a, b) {
-        (DirObject::Dir { .. }, DirObject::File { .. }) => Ordering::Less,
-        (DirObject::File { .. }, DirObject::Dir { .. }) => Ordering::Greater,
-        (DirObject::Dir { name: a_name, .. }, DirObject::Dir { name: b_name, .. }) => name_ordering(a_name, b_name),
-        (DirObject::File { name: a_name, .. }, DirObject::File { name: b_name, .. }) => name_ordering(a_name, b_name),
-    }
-}
-
-fn name_ordering(a: &str, b: &str) -> Ordering {
-    match (a, b) {
-        (a, b) if a.starts_with('.') ^ b.starts_with('.') => {
-            if a.starts_with('.') {
-                Ordering::Greater
-            } else {
-                Ordering::Less
-            }
-        }
-        (a, b) => a.cmp(b),
-    }
 }
