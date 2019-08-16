@@ -1,6 +1,8 @@
+use std::borrow::BorrowMut;
 use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::env;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -26,8 +28,10 @@ pub enum Either<A, B> {
     Right(B),
 }
 
+#[derive(Clone)]
 pub struct State {
-    pub dir: Box<Dir>,
+    pub dir: Dir,
+    pub parents: Vec<Dir>,
 }
 
 #[derive(Clone)]
@@ -35,7 +39,6 @@ pub struct Dir {
     pub path: PathBuf,
     pub contents: Vec<DirObject>,
     pub content_selection: usize,
-    pub parent: Option<Box<Dir>>,
 }
 
 fn main() -> Result<(), ErrorCode> {
@@ -43,72 +46,72 @@ fn main() -> Result<(), ErrorCode> {
 
     let matches = App::new("sidle").version(VERSION).get_matches();
 
-    let (ui_thread_handle, ui_sender) = ui::start();
+    let mut screen =
+        AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
+
     let current_dir_path = std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state: Arc<RwLock<State>> = Arc::new(RwLock::new(State {
-        dir: Box::new(Dir { path: current_dir_path, contents: dir_contents, content_selection: 0, parent: None }),
-    }));
-    ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
+    let mut state =
+        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
+
+    ui::render(&state, &mut screen)?;
 
     for key_event in std::io::stdin().keys() {
         let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
         if key == Key::Char('q') {
-            match ui_sender.send(Either::Left(())) {
-                Ok(_) => break,
-                Err(_) => Result::Err(error_code::FAILED_TO_TERMINATE_UI_THREAD)?,
-            }
+            break;
         } else {
-            new_state(&state, key)?;
-            ui_sender.send(Either::Right(state.clone())).map_err(|_| error_code::COULD_NOT_SEND_TO_UI_THREAD)?;
+            state = new_state(state, key)?;
+            ui::render(&state, &mut screen)?;
         }
     }
 
-    ui_thread_handle.join().map_err(|_| error_code::FAILED_TO_TERMINATE_UI_THREAD)?
+    Ok(())
 }
 
-fn new_state(current_state: &Arc<RwLock<State>>, key: Key) -> Result<(), ErrorCode> {
-    let mut write_state = current_state.write().map_err(|_| error_code::COULD_NOT_OBTAIN_LOCK_ON_STATE)?;
+fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
     match key {
         Key::Up => {
-            write_state.dir.content_selection =
-                std::cmp::min(write_state.dir.contents.len() - 1, write_state.dir.content_selection + 1)
+            current_state.dir.content_selection =
+                std::cmp::min(current_state.dir.contents.len() - 1, current_state.dir.content_selection + 1);
+            Ok(current_state)
         }
         Key::Down => {
-            if write_state.dir.content_selection >= 1 {
-                write_state.dir.content_selection -= 1
+            if current_state.dir.content_selection >= 1 {
+                current_state.dir.content_selection -= 1
             }
+            Ok(current_state)
         }
         Key::Right => {
-            let dir_name = write_state.dir.contents.get(write_state.dir.content_selection).and_then(|selection| {
-                match selection {
+            let dir_name =
+                current_state.dir.contents.get(current_state.dir.content_selection).and_then(|selection| match selection {
                     DirObject::File { .. } => None,
-                    DirObject::Dir { name, .. } => Some(name.clone())
-                }
-            });
+                    DirObject::Dir { name, .. } => Some(name.clone()),
+                });
 
             match dir_name {
                 None => (),
                 Some(dir_name) => {
-                    let parent_dir = write_state.dir.clone();
-                    write_state.dir.path.push(dir_name);
-                    write_state.dir.contents = read_dir(&write_state.dir.path)?;
-                    write_state.dir.parent = Some(parent_dir);
+                    let parent_dir = current_state.dir.clone();
+                    current_state.dir.path.push(dir_name);
+                    current_state.dir.contents = read_dir(&current_state.dir.path)?;
+                    current_state.parents.push(parent_dir);
                 }
             }
-        },
-        Key::Left => {
-//            match write_state.dir.parent.as_ref() {
-//                None => unimplemented!(),
-//                Some(parent) => {
-//                    write_state.dir = *parent;
-//                }
-//            }
+
+            Ok(current_state)
         }
-        _ => {}
+        Key::Left => {
+            let mut parents = current_state.parents;
+            let parent = match parents.pop() {
+                None => unimplemented!(),
+                Some(tail) => tail,
+            };
+            Ok(State { dir: parent, parents })
+        }
+        _ => Ok(current_state),
     }
-    Ok(())
 }
 
 fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
