@@ -16,7 +16,7 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
-use std::io::stdout;
+use std::io::{stdout, stdin};
 use std::io::Write;
 
 mod dir_object;
@@ -62,7 +62,7 @@ fn main() -> Result<(), ErrorCode> {
         let mut screen =
             AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
 
-        ui::render(&state, &mut screen)?;
+        ui::render(&state, &mut screen, false)?;
 
         for key_event in std::io::stdin().keys() {
             let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
@@ -70,7 +70,7 @@ fn main() -> Result<(), ErrorCode> {
                 break;
             } else {
                 state = new_state(state, key)?;
-                ui::render(&state, &mut screen)?;
+                ui::render(&state, &mut screen, key == Key::Left || key == Key::Right)?;
             }
         }
     }

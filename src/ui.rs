@@ -49,12 +49,14 @@ use crate::{DirObject, Either, State};
 //    (ui_thread_handle, sender.clone())
 //}
 
-pub fn render(state: &State, screen: &mut impl Write) -> Result<(), ErrorCode> {
+pub fn render(state: &State, screen: &mut impl Write, clear_screen: bool) -> Result<(), ErrorCode> {
     let buffer_init = format!("{}", termion::clear::UntilNewline);
     let mut terminal_line_buffers: Vec<String> = Vec::new();
 
     let (width, height) = terminal_size().map_err(|_| error_code::COULD_NOT_DETERMINE_TERMINAL_SIZE)?;
     terminal_line_buffers.resize(height as usize, buffer_init.clone());
+
+    if clear_screen { write!(screen, "{}", termion::clear::AfterCursor).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?; }
 
     print_dir_contents(screen, height, terminal_line_buffers.as_mut_slice(), state.dir.borrow().deref())?;
     screen.flush().map_err(|_| error_code::FAILED_TO_FLUSH_UI_SCREEN) // final flush before handing screen back to shell
