@@ -16,6 +16,8 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
+use std::io::stdout;
+use std::io::Write;
 
 mod dir_object;
 mod error_code;
@@ -46,29 +48,34 @@ fn main() -> Result<(), ErrorCode> {
 
     let matches = App::new("sidle").version(VERSION).arg(Arg::with_name("path").required(false)).get_matches();
 
-    let mut screen =
-        AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
+        let current_dir_path = match matches.value_of("path") {
+            None => std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?,
+            Some(path) => PathBuf::from(path),
+        };
+        let dir_contents = read_dir(&current_dir_path)?;
 
-    let current_dir_path = match matches.value_of("path") {
-        None => std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?,
-        Some(path) => PathBuf::from(path),
-    };
-    let dir_contents = read_dir(&current_dir_path)?;
+        let mut state =
+            State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
 
-    let mut state =
-        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
+    // termion alternate screen scope
+    {
+        let mut screen =
+            AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
 
-    ui::render(&state, &mut screen)?;
+        ui::render(&state, &mut screen)?;
 
-    for key_event in std::io::stdin().keys() {
-        let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
-        if key == Key::Char('q') {
-            break;
-        } else {
-            state = new_state(state, key)?;
-            ui::render(&state, &mut screen)?;
+        for key_event in std::io::stdin().keys() {
+            let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
+            if key == Key::Char('q') {
+                break;
+            } else {
+                state = new_state(state, key)?;
+                ui::render(&state, &mut screen)?;
+            }
         }
     }
+
+    write!(stdout(), "{}\n", state.dir.path.to_str().unwrap());
 
     Ok(())
 }
