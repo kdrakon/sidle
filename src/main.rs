@@ -66,7 +66,7 @@ fn main() -> Result<(), ErrorCode> {
 
         for key_event in std::io::stdin().keys() {
             let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
-            if key == Key::Char('q') {
+            if key == Key::Char('q') || key == Key::Char('\n') {
                 break;
             } else {
                 state = new_state(state, key)?;
