@@ -15,6 +15,7 @@ use crate::error_code;
 use crate::error_code::ErrorCode;
 use crate::Dir;
 use crate::{DirObject, Either, State};
+use std::time::Duration;
 
 //pub fn start() -> (JoinHandle<Result<(), ErrorCode>>, Sender<Either<(), Arc<RwLock<State>>>>) {
 //    let (sender, receiver): (Sender<Either<(), Arc<RwLock<State>>>>, Receiver<Either<(), Arc<RwLock<State>>>>) =
@@ -56,7 +57,9 @@ pub fn render(state: &State, screen: &mut impl Write, clear_screen: bool) -> Res
     let (width, height) = terminal_size().map_err(|_| error_code::COULD_NOT_DETERMINE_TERMINAL_SIZE)?;
     terminal_line_buffers.resize(height as usize, buffer_init.clone());
 
-    if clear_screen { write!(screen, "{}", termion::clear::AfterCursor).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?; }
+    if clear_screen {
+        write!(screen, "{}", termion::clear::AfterCursor).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+    }
 
     print_dir_contents(screen, height, terminal_line_buffers.as_mut_slice(), state.dir.borrow().deref())?;
     screen.flush().map_err(|_| error_code::FAILED_TO_FLUSH_UI_SCREEN) // final flush before handing screen back to shell
@@ -71,7 +74,13 @@ fn print_dir_contents(
     for (index, content) in dir.contents.iter().enumerate() {
         let line = match content {
             DirObject::Dir { name, .. } => {
-                let line = format!("{}{}{}", termion::style::Bold, name, termion::style::Reset);
+                let line = format!(
+                    "{}{}{}{}",
+                    termion::color::Fg(termion::color::LightCyan),
+                    termion::style::Bold,
+                    name,
+                    termion::style::Reset
+                );
                 if index == dir.content_selection {
                     highlight_line(&line)
                 } else {
@@ -95,7 +104,9 @@ fn print_dir_contents(
                 }
             }
         };
-        terminal_line_buffers[index] = line;
+        if index < terminal_line_buffers.len() {
+            terminal_line_buffers[index] = line;
+        }
     }
 
     write!(screen, "{}", termion::cursor::Goto(1, terminal_height)).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
@@ -109,5 +120,5 @@ fn print_dir_contents(
 }
 
 fn highlight_line(line: &str) -> String {
-    format!("{}{}{}", termion::color::Bg(termion::color::LightWhite), termion::color::Fg(termion::color::Black), line)
+    format!("{}{}", termion::style::Invert, line)
 }

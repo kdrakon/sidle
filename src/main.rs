@@ -2,8 +2,11 @@ use std::borrow::BorrowMut;
 use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::env;
+use std::io::Write;
+use std::io::{stdin, stdout};
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::process::{exit, Command};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -16,8 +19,7 @@ use termion::terminal_size;
 
 use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
-use std::io::{stdout, stdin};
-use std::io::Write;
+use std::fs::File;
 
 mod dir_object;
 mod error_code;
@@ -46,16 +48,35 @@ pub struct Dir {
 fn main() -> Result<(), ErrorCode> {
     let _args: Vec<String> = env::args().collect();
 
-    let matches = App::new("sidle").version(VERSION).arg(Arg::with_name("path").required(false)).get_matches();
+    let matches = App::new("sidle")
+        .version(VERSION)
+        .arg(Arg::with_name("path").required(false).takes_value(true))
+        .arg(
+            Arg::with_name("output")
+                .required(false)
+                .short("o")
+                .takes_value(true)
+                .help("Where to write the final path chosen. Defaults to the file 'sidle_path' in a temp directory"),
+        )
+        .get_matches();
 
-        let current_dir_path = match matches.value_of("path") {
-            None => std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?,
-            Some(path) => PathBuf::from(path),
-        };
-        let dir_contents = read_dir(&current_dir_path)?;
+    let output_path = match matches.value_of("output") {
+        Some(output) => PathBuf::from(output),
+        None => {
+            let mut temp_path = std::env::temp_dir();
+            temp_path.push("sidle_path");
+            temp_path
+        }
+    };
 
-        let mut state =
-            State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
+    let current_dir_path = match matches.value_of("path") {
+        None => std::env::current_dir().map_err(|_| error_code::COULD_NOT_LIST_DIR)?,
+        Some(path) => PathBuf::from(path),
+    };
+    let dir_contents = read_dir(&current_dir_path)?;
+
+    let mut state =
+        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
 
     // termion alternate screen scope
     {
@@ -66,7 +87,10 @@ fn main() -> Result<(), ErrorCode> {
 
         for key_event in std::io::stdin().keys() {
             let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
-            if key == Key::Char('q') || key == Key::Char('\n') {
+            if key == Key::Char('q') {
+                break;
+            } else if key == Key::Char('\n') {
+                write_path(&output_path, state.dir.path.to_str().expect("Error converting path to string"));
                 break;
             } else {
                 state = new_state(state, key)?;
@@ -75,9 +99,23 @@ fn main() -> Result<(), ErrorCode> {
         }
     }
 
-    write!(stdout(), "{}\n", state.dir.path.to_str().unwrap());
-
     Ok(())
+}
+
+fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
+    let mut vec: Vec<DirObject> = vec![];
+    for dir_result in std::fs::read_dir(path).map_err(|_| error_code::COULD_NOT_LIST_DIR)? {
+        let dir_entry = dir_result.map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
+        let dir_object = dir_entry.new_dir_object()?;
+        vec.push(dir_object);
+    }
+    vec.sort_by(dir_object::dir_ordering);
+    Ok(vec)
+}
+
+fn write_path(path: &PathBuf, content: &str) -> Result<(), ErrorCode> {
+    let mut file = File::create(path).map_err(|_| error_code::ERROR_WRITING_TO_OUTPUT)?;
+    write!(file, "{}\n", content).map_err(|_| error_code::ERROR_WRITING_TO_OUTPUT)
 }
 
 fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
@@ -126,15 +164,4 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
         }
         _ => Ok(current_state),
     }
-}
-
-fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
-    let mut vec: Vec<DirObject> = vec![];
-    for dir_result in std::fs::read_dir(path).map_err(|_| error_code::COULD_NOT_LIST_DIR)? {
-        let dir_entry = dir_result.map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
-        let dir_object = dir_entry.new_dir_object()?;
-        vec.push(dir_object);
-    }
-    vec.sort_by(dir_object::dir_ordering);
-    Ok(vec)
 }
