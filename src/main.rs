@@ -3,11 +3,11 @@ use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::env;
 use std::fs::File;
-use std::io::{stdin, stdout};
 use std::io::Write;
+use std::io::{stdin, stdout};
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::process::{Command, exit};
+use std::process::{exit, Command};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -156,14 +156,17 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                 Some(parent) => parent,
                 None => {
                     let existing_path = current_state.dir.path.clone();
-                    let filename_selected = existing_path.file_name().and_then(|p|p.to_str());
+                    let dir_selected = current_state
+                        .dir
+                        .path
+                        .file_name()
+                        .and_then(|p| p.to_str())
+                        .map(|p| DirObject::Dir { name: String::from(p), path: existing_path });
                     current_state.dir.path.pop();
                     let contents = read_dir(&current_state.dir.path)?;
                     let content_selection = {
-                        if let Some(filename) = filename_selected {
-                            contents.binary_search_by(|dir_object|{
-                                filename.cmp(dir_object.filename())
-                            }).ok()
+                        if let Some(dir_selected) = dir_selected {
+                            contents.binary_search_by(|dir_object| dir_object::dir_ordering(dir_object, &dir_selected)).ok()
                         } else {
                             None
                         }

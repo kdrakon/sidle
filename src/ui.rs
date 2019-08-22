@@ -40,24 +40,18 @@ fn print_dir_contents(
 ) -> Result<(), ErrorCode> {
     for (index, content) in dir.contents.iter().enumerate() {
         let line = match content {
-            DirObject::Dir { name, .. } => {
-                format!(
-                    "{}{}{}{}",
-                    termion::color::Fg(termion::color::LightCyan),
-                    termion::style::Bold,
-                    name,
-                    termion::style::Reset
-                )
-            }
+            DirObject::Dir { name, .. } => format!(
+                "{}{}{}{}",
+                termion::color::Fg(termion::color::LightCyan),
+                termion::style::Bold,
+                name,
+                termion::style::Reset
+            ),
             DirObject::File { name, .. } => format!("{}{}", name, termion::style::Reset),
-            DirObject::Unknown { name, .. } => format!("{}{}", name, termion::style::Reset)
+            DirObject::Unknown { name, .. } => format!("{}{}", name, termion::style::Reset),
         };
 
-        let line = if index == dir.content_selection {
-            highlight_line(&line)
-        } else {
-            line
-        };
+        let line = if index == dir.content_selection { highlight_line(&line) } else { line };
 
         if index < terminal_line_buffers.len() {
             terminal_line_buffers[index] = line;
