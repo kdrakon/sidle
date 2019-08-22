@@ -12,7 +12,7 @@ pub enum DirObject {
     Unknown { name: String, path: PathBuf },
 }
 
-trait HasFileName {
+pub trait HasFileName {
     fn filename(&self) -> &str;
 }
 

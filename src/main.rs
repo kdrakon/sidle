@@ -2,11 +2,12 @@ use std::borrow::BorrowMut;
 use std::cell::{Ref, RefCell};
 use std::cmp::Ordering;
 use std::env;
-use std::io::Write;
+use std::fs::File;
 use std::io::{stdin, stdout};
+use std::io::Write;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -17,9 +18,8 @@ use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use termion::terminal_size;
 
-use crate::dir_object::{DirObject, IntoDirObject};
+use crate::dir_object::{DirObject, HasFileName, IntoDirObject};
 use crate::error_code::ErrorCode;
-use std::fs::File;
 
 mod dir_object;
 mod error_code;
@@ -87,13 +87,13 @@ fn main() -> Result<(), ErrorCode> {
 
         for key_event in std::io::stdin().keys() {
             let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
+            state = new_state(state, key)?;
             if key == Key::Char('q') {
                 break;
-            } else if key == Key::Char('\n') {
+            } else if key == Key::Char('\n') || key == Key::Char('.') {
                 write_path(&output_path, state.dir.path.to_str().expect("Error converting path to string"));
                 break;
             } else {
-                state = new_state(state, key)?;
                 ui::render(&state, &mut screen, key == Key::Left || key == Key::Right)?;
             }
         }
@@ -131,7 +131,7 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
             }
             Ok(current_state)
         }
-        Key::Right => {
+        Key::Right | Key::Char('\n') => {
             let dir_name =
                 current_state.dir.contents.get(current_state.dir.content_selection).and_then(|selection| match selection {
                     DirObject::File { .. } | DirObject::Unknown { .. } => None,
@@ -155,9 +155,20 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
             let parent = match parents.pop() {
                 Some(parent) => parent,
                 None => {
+                    let existing_path = current_state.dir.path.clone();
+                    let filename_selected = existing_path.file_name().and_then(|p|p.to_str());
                     current_state.dir.path.pop();
                     let contents = read_dir(&current_state.dir.path)?;
-                    Dir { path: current_state.dir.path, contents, content_selection: 0 }
+                    let content_selection = {
+                        if let Some(filename) = filename_selected {
+                            contents.binary_search_by(|dir_object|{
+                                filename.cmp(dir_object.filename())
+                            }).ok()
+                        } else {
+                            None
+                        }
+                    };
+                    Dir { path: current_state.dir.path, contents, content_selection: content_selection.unwrap_or(0) }
                 }
             };
             Ok(State { dir: parent, parents })
