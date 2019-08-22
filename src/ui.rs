@@ -1,27 +1,20 @@
 use core::borrow::Borrow;
-use std::cell::{Ref, RefCell};
-use std::cmp::Ordering;
+
 use std::io::Write;
 use std::ops::Deref;
-use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Arc, RwLock};
-use std::thread::JoinHandle;
 
-use termion::raw::IntoRawMode;
-use termion::screen::AlternateScreen;
 use termion::terminal_size;
 
 use crate::error_code;
 use crate::error_code::ErrorCode;
 use crate::Dir;
-use crate::{DirObject, Either, State};
-use std::time::Duration;
+use crate::{DirObject, State};
 
 pub fn render(state: &State, screen: &mut impl Write, clear_screen: bool) -> Result<(), ErrorCode> {
     let buffer_init = format!("{}", termion::clear::UntilNewline);
     let mut terminal_line_buffers: Vec<String> = Vec::new();
 
-    let (width, height) = terminal_size().map_err(|_| error_code::COULD_NOT_DETERMINE_TERMINAL_SIZE)?;
+    let (_width, height) = terminal_size().map_err(|_| error_code::COULD_NOT_DETERMINE_TERMINAL_SIZE)?;
     terminal_line_buffers.resize(height as usize, buffer_init.clone());
 
     if clear_screen {

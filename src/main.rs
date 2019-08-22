@@ -1,24 +1,16 @@
-use std::borrow::BorrowMut;
-use std::cell::{Ref, RefCell};
-use std::cmp::Ordering;
 use std::env;
 use std::fs::File;
 use std::io::Write;
-use std::io::{stdin, stdout};
-use std::ops::Deref;
+
 use std::path::PathBuf;
-use std::process::{exit, Command};
-use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 use clap::{App, Arg};
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
-use termion::terminal_size;
 
-use crate::dir_object::{DirObject, HasFileName, IntoDirObject};
+use crate::dir_object::{DirObject, IntoDirObject};
 use crate::error_code::ErrorCode;
 
 mod dir_object;
@@ -86,12 +78,12 @@ fn main() -> Result<(), ErrorCode> {
         ui::render(&state, &mut screen, false)?;
 
         for key_event in std::io::stdin().keys() {
-            let key = key_event.map_err(|err| error_code::KEY_INPUT_ERROR)?;
+            let key = key_event.map_err(|_err| error_code::KEY_INPUT_ERROR)?;
             state = new_state(state, key)?;
             if key == Key::Char('q') {
                 break;
             } else if key == Key::Char('\n') || key == Key::Char('.') {
-                write_path(&output_path, state.dir.path.to_str().expect("Error converting path to string"));
+                write_path(&output_path, state.dir.path.to_str().expect("Error converting path to string"))?;
                 break;
             } else {
                 ui::render(&state, &mut screen, key == Key::Left || key == Key::Right)?;

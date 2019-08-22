@@ -1,5 +1,5 @@
 use std::fs::DirEntry;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::error_code;
 use crate::error_code::ErrorCode;
