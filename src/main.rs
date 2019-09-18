@@ -1,7 +1,6 @@
 use std::env;
 use std::fs::File;
 use std::io::Write;
-
 use std::path::PathBuf;
 
 use clap::{App, Arg};
@@ -28,6 +27,7 @@ pub enum Either<A, B> {
 pub struct State {
     pub dir: Dir,
     pub parents: Vec<Dir>,
+    pub prev_selections: Vec<(PathBuf, usize)>
 }
 
 #[derive(Clone)]
@@ -68,7 +68,7 @@ fn main() -> Result<(), ErrorCode> {
     let dir_contents = read_dir(&current_dir_path)?;
 
     let mut state =
-        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] };
+        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] , prev_selections: vec![]};
 
     // termion alternate screen scope
     {
@@ -134,9 +134,19 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                 None => Ok(current_state),
                 Some(dir_name) => {
                     let parent_dir = current_state.dir.clone();
+                    let prev_selection = current_state.prev_selections.pop();
                     current_state.dir.path.push(dir_name);
                     current_state.dir.contents = read_dir(&current_state.dir.path)?;
-                    current_state.dir.content_selection = 0;
+                    current_state.dir.content_selection = match &prev_selection {
+                        None => 0,
+                        Some((last_path, selection)) => {
+                            if last_path == &current_state.dir.path {
+                                *selection
+                            } else {
+                                0
+                            }
+                        }
+                    };
                     current_state.parents.push(parent_dir);
                     Ok(current_state)
                 }
@@ -144,6 +154,9 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
         }
         Key::Left => {
             let mut parents = current_state.parents;
+            let mut prev_selections = current_state.prev_selections;
+            prev_selections.push((current_state.dir.path.clone(), current_state.dir.content_selection));
+
             let parent = match parents.pop() {
                 Some(parent) => parent,
                 None => {
@@ -166,7 +179,7 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                     Dir { path: current_state.dir.path, contents, content_selection: content_selection.unwrap_or(0) }
                 }
             };
-            Ok(State { dir: parent, parents })
+            Ok(State { dir: parent, parents, prev_selections })
         }
         _ => Ok(current_state),
     }
