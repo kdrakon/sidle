@@ -1,5 +1,7 @@
 pub type ErrorCode = u8;
 
+pub const ABORT: u8 = 1;
+
 pub const KEY_INPUT_ERROR: u8 = 100;
 pub const COULD_NOT_LIST_DIR: u8 = 101;
 pub const COULD_NOT_READ_METADATA: u8 = 102;

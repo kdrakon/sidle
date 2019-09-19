@@ -101,7 +101,7 @@ fn main() -> Result<(), ErrorCode> {
             let key = key_event.map_err(|_err| error_code::KEY_INPUT_ERROR)?;
             state = new_state(state, key)?;
             if key == Key::Char('q') {
-                break;
+                Err(error_code::ABORT)?
             } else if key == Key::Char('\n') || key == Key::Char('.') {
                 if let Some(file_path) = state.file_selection.file_selected {
                     write_path(&output_path, file_path.to_str().expect("Error converting directory path to string"))?
