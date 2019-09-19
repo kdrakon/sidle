@@ -27,7 +27,8 @@ pub enum Either<A, B> {
 pub struct State {
     pub dir: Dir,
     pub parents: Vec<Dir>,
-    pub prev_selections: Vec<(PathBuf, usize)>
+    pub prev_selections: Vec<(PathBuf, usize)>,
+    pub file_selection: FileSelection,
 }
 
 #[derive(Clone)]
@@ -35,6 +36,12 @@ pub struct Dir {
     pub path: PathBuf,
     pub contents: Vec<DirObject>,
     pub content_selection: usize,
+}
+
+#[derive(Clone)]
+pub struct FileSelection {
+    pub files_selectable: bool,
+    pub file_selected: Option<PathBuf>,
 }
 
 fn main() -> Result<(), ErrorCode> {
@@ -49,6 +56,13 @@ fn main() -> Result<(), ErrorCode> {
                 .short("o")
                 .takes_value(true)
                 .help("Where to write the final path chosen. Defaults to the file 'sidle_path' in a temp directory"),
+        )
+        .arg(
+            Arg::with_name("files_selectable")
+                .required(false)
+                .long("files-selectable")
+                .takes_value(false)
+                .help("Allows files, in addition to directories, to be selected as output"),
         )
         .get_matches();
 
@@ -67,8 +81,14 @@ fn main() -> Result<(), ErrorCode> {
     };
     let dir_contents = read_dir(&current_dir_path)?;
 
-    let mut state =
-        State { dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 }, parents: vec![] , prev_selections: vec![]};
+    let file_selection = FileSelection { files_selectable: matches.is_present("files_selectable"), file_selected: None };
+
+    let mut state = State {
+        dir: Dir { path: current_dir_path, contents: dir_contents, content_selection: 0 },
+        parents: vec![],
+        prev_selections: vec![],
+        file_selection,
+    };
 
     // termion alternate screen scope
     {
@@ -83,7 +103,11 @@ fn main() -> Result<(), ErrorCode> {
             if key == Key::Char('q') {
                 break;
             } else if key == Key::Char('\n') || key == Key::Char('.') {
-                write_path(&output_path, state.dir.path.to_str().expect("Error converting path to string"))?;
+                if let Some(file_path) = state.file_selection.file_selected {
+                    write_path(&output_path, file_path.to_str().expect("Error converting directory path to string"))?
+                } else {
+                    write_path(&output_path, state.dir.path.to_str().expect("Error converting directory path to string"))?
+                };
                 break;
             } else {
                 ui::render(&state, &mut screen, key == Key::Left || key == Key::Right)?;
@@ -124,17 +148,20 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
             Ok(current_state)
         }
         Key::Right | Key::Char('\n') => {
-            let dir_name =
-                current_state.dir.contents.get(current_state.dir.content_selection).and_then(|selection| match selection {
-                    DirObject::File { .. } | DirObject::Unknown { .. } => None,
-                    DirObject::Dir { name, .. } => Some(name.clone()),
-                });
+            let dir_object = current_state.dir.contents.get(current_state.dir.content_selection);
 
-            match dir_name {
-                None => Ok(current_state),
-                Some(dir_name) => {
+            match dir_object {
+                None | Some(DirObject::Unknown { .. }) => Ok(current_state),
+                Some(DirObject::File { name: _, path }) => {
+                    if current_state.file_selection.files_selectable {
+                        current_state.file_selection.file_selected = Some(path.clone())
+                    }
+                    Ok(current_state)
+                }
+                Some(DirObject::Dir { name: dir_name, .. }) => {
                     let parent_dir = current_state.dir.clone();
                     let prev_selection = current_state.prev_selections.pop();
+                    current_state.file_selection.file_selected = None;
                     current_state.dir.path.push(dir_name);
                     current_state.dir.contents = read_dir(&current_state.dir.path)?;
                     current_state.dir.content_selection = match &prev_selection {
@@ -151,6 +178,10 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                     Ok(current_state)
                 }
             }
+        }
+        Key::Char('.') => {
+            current_state.file_selection.file_selected = None;
+            Ok(current_state)
         }
         Key::Left => {
             let mut parents = current_state.parents;
@@ -179,7 +210,7 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                     Dir { path: current_state.dir.path, contents, content_selection: content_selection.unwrap_or(0) }
                 }
             };
-            Ok(State { dir: parent, parents, prev_selections })
+            Ok(State { dir: parent, parents, prev_selections, file_selection: current_state.file_selection })
         }
         _ => Ok(current_state),
     }
