@@ -92,11 +92,12 @@ fn main() -> Result<(), ErrorCode> {
 
     // termion alternate screen scope
     {
+        let mut terminal_line_buffers: Vec<String> = Vec::new();
         let mut screen =
             AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
         write!(screen, "{}", termion::cursor::Hide).map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?;
 
-        ui::render(&state, &mut screen, false)?;
+        ui::render(&state, &mut terminal_line_buffers, &mut screen, false)?;
 
         for key_event in std::io::stdin().keys() {
             let key = key_event.map_err(|_err| error_code::KEY_INPUT_ERROR)?;
@@ -111,7 +112,7 @@ fn main() -> Result<(), ErrorCode> {
                 };
                 break;
             } else {
-                ui::render(&state, &mut screen, key == Key::Left || key == Key::Right)?;
+                ui::render(&state, &mut terminal_line_buffers, &mut screen, key == Key::Left || key == Key::Right)?;
             }
         }
     }
