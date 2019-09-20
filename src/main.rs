@@ -94,6 +94,7 @@ fn main() -> Result<(), ErrorCode> {
     {
         let mut screen =
             AlternateScreen::from(std::io::stdout().into_raw_mode().map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?);
+        write!(screen, "{}", termion::cursor::Hide).map_err(|_| error_code::FAILED_TO_CREATE_UI_SCREEN)?;
 
         ui::render(&state, &mut screen, false)?;
 
