@@ -15,14 +15,29 @@ $ cd ..
 $ cd ..
 ```
 
-you can setup an alias to do this:
+you can set up an alias to do this
 
 ```bash
 $ alias sd='sidle -o /tmp/sidle_path && cd $(cat /tmp/sidle_path)'
-$ sd
 ```
 
-[![asciicast](https://asciinema.org/a/qbrJWI1KrRquu7sX7HD9QK6f0.svg)](https://asciinema.org/a/qbrJWI1KrRquu7sX7HD9QK6f0)
+and change directories as demonstrated below
+
+[![asciicast](https://asciinema.org/a/QPTUGgbqnuLj4mP7fD6e958by.svg)](https://asciinema.org/a/QPTUGgbqnuLj4mP7fD6e958by)
+
+### Other uses?
+You can use **sidle** with pretty much any application that accepts a file system path as an argument.
+
+#### To delete a file
+```bash
+$ alias sidle_delete='sidle --files-selectable -o /tmp/sidle_path && rm $(cat /tmp/sidle_path)'
+```
+
+#### To edit a file
+```bash
+$ alias sidle_edit='sidle --files-selectable -o /tmp/sidle_path && vim $(cat /tmp/sidle_path)'
+```
+
 
 ## Usage
 ```
