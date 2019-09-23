@@ -10,6 +10,7 @@ pub enum DirObject {
     Dir { name: String, path: PathBuf },
     File { name: String, path: PathBuf },
     Unknown { name: String, path: PathBuf },
+    UnreadableDirContent,
 }
 
 pub trait HasFileName {
@@ -22,6 +23,7 @@ impl HasFileName for DirObject {
             DirObject::Dir { name, .. } => name,
             DirObject::File { name, .. } => name,
             DirObject::Unknown { name, .. } => name,
+            DirObject::UnreadableDirContent => "",
         }
     }
 }

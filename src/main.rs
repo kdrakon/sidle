@@ -123,11 +123,17 @@ fn main() -> Result<(), ErrorCode> {
 
 fn read_dir(path: &PathBuf) -> Result<Vec<DirObject>, ErrorCode> {
     let mut vec: Vec<DirObject> = vec![];
-    for dir_result in std::fs::read_dir(path).map_err(|_| error_code::COULD_NOT_LIST_DIR)? {
-        let dir_entry = dir_result.map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
-        let dir_object = dir_entry.new_dir_object()?;
-        vec.push(dir_object);
+    match std::fs::read_dir(path) {
+        Err(_) => vec.push(DirObject::UnreadableDirContent),
+        Ok(read_dir) => {
+            for dir_result in read_dir {
+                let dir_entry = dir_result.map_err(|_| error_code::COULD_NOT_LIST_DIR)?;
+                let dir_object = dir_entry.new_dir_object()?;
+                vec.push(dir_object);
+            }
+        }
     }
+
     vec.sort_by(dir_object::dir_ordering);
     Ok(vec)
 }
@@ -154,7 +160,7 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
             let dir_object = current_state.dir.contents.get(current_state.dir.content_selection);
 
             match dir_object {
-                None | Some(DirObject::Unknown { .. }) => Ok(current_state),
+                None | Some(DirObject::Unknown { .. }) | Some(DirObject::UnreadableDirContent) => Ok(current_state),
                 Some(DirObject::File { name: _, path }) => {
                     if current_state.file_selection.files_selectable {
                         current_state.file_selection.file_selected = Some(path.clone())

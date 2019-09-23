@@ -46,6 +46,7 @@ fn print_dir_contents(screen: &mut impl Write, terminal_line_buffers: &mut [Stri
             ),
             DirObject::File { name, .. } => format!("{}", name),
             DirObject::Unknown { name, .. } => format!("{}", name),
+            DirObject::UnreadableDirContent => format!("unreadable 🔐"),
         };
 
         let mut line = if index == (dir.content_selection - index_offset) { highlight_line(&line) } else { line };
