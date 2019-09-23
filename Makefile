@@ -15,5 +15,5 @@ build: clean
 
 package: build
 	cd target/${RUST_TARGET}/release/ && ${SHA_COMMAND} sidle > checksum-sha512
-	tar vczf sidle_${RUST_TARGET}_${OS_TARGET}.tar.gz -C target/${RUST_TARGET}/release sidle checksum-sha512
+	tar vczf sidle_${RUST_TARGET}.tar.gz -C target/${RUST_TARGET}/release sidle checksum-sha512
 
