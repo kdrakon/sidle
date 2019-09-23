@@ -50,7 +50,12 @@ fn main() -> Result<(), ErrorCode> {
 
     let matches = App::new("sidle")
         .version(VERSION)
-        .arg(Arg::with_name("path").required(false).takes_value(true))
+        .arg(
+            Arg::with_name("path")
+                .required(false)
+                .takes_value(true)
+                .help("The path to start from. Defaults to current directory."),
+        )
         .arg(
             Arg::with_name("output")
                 .required(false)
