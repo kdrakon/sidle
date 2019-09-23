@@ -21,7 +21,10 @@ pub fn render(
     terminal_line_buffers.resize(height as usize - 1, buffer_init.clone()); // remove 1 for space to print the full path below
 
     if clear_screen {
-        write!(screen, "{}", termion::clear::AfterCursor).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+        write!(screen, "{}", termion::clear::All).map_err(|_| error_code::FAILED_TO_WRITE_TO_UI_SCREEN)?;
+        for line in terminal_line_buffers.iter_mut() {
+            line.clear()
+        }
     }
 
     print_dir_contents(screen, terminal_line_buffers.as_mut_slice(), state.dir.borrow().deref())?;
@@ -41,13 +44,15 @@ fn print_dir_contents(screen: &mut impl Write, terminal_line_buffers: &mut [Stri
                 name,
                 termion::style::Reset
             ),
-            DirObject::File { name, .. } => format!("{}{}", name, termion::style::Reset),
-            DirObject::Unknown { name, .. } => format!("{}{}", name, termion::style::Reset),
+            DirObject::File { name, .. } => format!("{}", name),
+            DirObject::Unknown { name, .. } => format!("{}", name),
         };
 
-        let line = if index == (dir.content_selection - index_offset) { highlight_line(&line) } else { line };
+        let mut line = if index == (dir.content_selection - index_offset) { highlight_line(&line) } else { line };
 
+        let end_of_line = format!("{}{}", termion::style::Reset, termion::clear::UntilNewline);
         if index < terminal_line_buffers.len() {
+            line.push_str(&end_of_line);
             terminal_line_buffers[index] = line;
         }
     }
