@@ -17,6 +17,7 @@ mod error_code;
 mod ui;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const PAGE_SKIP: usize = 10;
 
 pub enum Either<A, B> {
     Left(A),
@@ -150,9 +151,20 @@ fn new_state(mut current_state: State, key: Key) -> Result<State, ErrorCode> {
                 std::cmp::min(current_state.dir.contents.len() - 1, current_state.dir.content_selection + 1);
             Ok(current_state)
         }
+        Key::PageUp => {
+            current_state.dir.content_selection =
+                std::cmp::min(current_state.dir.contents.len() - 1, current_state.dir.content_selection + PAGE_SKIP);
+            Ok(current_state)
+        }
         Key::Down => {
             if current_state.dir.content_selection >= 1 {
                 current_state.dir.content_selection -= 1
+            }
+            Ok(current_state)
+        }
+        Key::PageDown => {
+            if current_state.dir.content_selection >= PAGE_SKIP {
+                current_state.dir.content_selection -= PAGE_SKIP
             }
             Ok(current_state)
         }
